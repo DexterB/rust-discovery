@@ -2,13 +2,14 @@
 #![no_main]
 #![no_std]
 
-#[macro_use]
-extern crate pg;
+#[allow(unused_imports)]
+use aux6::{entry, iprint, iprintln};
 
-#[inline(never)]
-#[no_mangle]
-pub fn main() -> ! {
-    iprintln!("Hello, world!");
+#[entry]
+fn main() -> ! {
+    let mut itm = aux6::init();
+
+    iprintln!(&mut itm.stim[0], "Hello, world!");
 
     loop {}
 }

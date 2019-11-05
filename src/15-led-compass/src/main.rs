@@ -2,16 +2,15 @@
 #![no_main]
 #![no_std]
 
-#[macro_use]
-extern crate pg;
+#[allow(unused_imports)]
+use aux15::{entry, iprint, iprintln, prelude::*};
 
-use pg::{delay, lsm303dlhc};
+#[entry]
+fn main() -> ! {
+    let (_leds, mut lsm303dlhc, mut delay, mut itm) = aux15::init();
 
-#[inline(never)]
-#[no_mangle]
-pub fn main() -> ! {
     loop {
-        iprintln!("{:?}", lsm303dlhc::magnetic_field());
-        delay::ms(1_000);
+        iprintln!(&mut itm.stim[0], "{:?}", lsm303dlhc.mag().unwrap());
+        delay.delay_ms(1_000_u16);
     }
 }

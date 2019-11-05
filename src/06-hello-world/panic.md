@@ -5,111 +5,84 @@ The `panic!` macro also sends its output to the ITM!
 Change the `main` function to look like this:
 
 ``` rust
-#[inline(never)]
-#[no_mangle]
-pub fn main() -> ! {
-    panic!("Hello, world!")
+#[entry]
+fn main() -> ! {
+    panic!("Hello, world!");
 }
 ```
 
-Let's try this program. But before that let's update `.gdbinit` to run that
-`monitor tpiu` for us at startup:
+Let's try this program. But before that let's update `openocd.gdb` to run that `monitor` stuff for
+us during GDB startup:
 
-```
-target remote :3333
-load
-monitor tpiu config internal itm.txt uart off 8000000
-break main
-continue
+``` diff
+ target remote :3333
+ set print asm-demangle on
+ set print pretty on
+ load
++monitor tpiu config internal itm.txt uart off 8000000
++monitor itm port 0 on
+ break main
+ continue
 ```
 
-```
-$ xargo build --target thumbv7em-none-eabihf
+OK, now run it.
 
-$ arm-none-eabi-gdb -q target/thumbv7em-none-eabihf/debug/hello-world
+``` console
+$ cargo run
 (..)
+Breakpoint 1, main () at src/06-hello-world/src/main.rs:10
+10          panic!("Hello, world!");
 
 (gdb) next
-11          panic!("Hello, world!")
-(gdb) next
-
-Program received signal SIGTRAP, Trace/breakpoint trap.
-f3::lang_items::panic_fmt (msg=..., file=..., line=11)
-    at $F3/src/lang_items.rs:12
-12          bkpt!();
-
-(gdb) _
 ```
 
-You'll see some new output in `itmdump`'s terminal.
+You'll see some new output in the `itmdump` terminal.
 
-```
-# itmdump's terminal
-PANIC at 'Hello, world!', src/main.rs:11
-```
-
-You won't get a `RUST_BACKTRACE` style backtrace in `itmdump`'s output, *but*
-you can get the equivalent inside GDB. You already know the command:
-
-```
-(gdb) backtrace
-#0  f3::lang_items::panic_fmt (msg=..., file=...,
-    line=10)
-    at $F3/src/lang_items.rs:12
-#1  0x0800193c in core::panicking::panic_fmt::h54fc4ef0e431f1de ()
-#2  0x080018d4 in core::panicking::panic::h2a0ea99cd46c9ef6 ()
-#3  0x080001f8 in hello_world::main ()
-    at $PWD/src/main.rs:10
+``` console
+$ # itmdump terminal
+(..)
+panicked at 'Hello, world!', src/06-hello-world/src/main.rs:10:5
 ```
 
-Ultimately, `panic!` is just another function call so you can see it leaves
-behind a trace of function calls.
+<!-- FIXME backtraces appear to be broken? -->
 
-Something other interesting thing happened when we hit the `panic!` but you may
-have missed it. Let's re-run the program but this time let's use `continue`
-instead of `next`:
+<!-- You won't get a `RUST_BACKTRACE` style backtrace in `itmdump`'s output, *but* -->
+<!-- you can get the equivalent inside GDB. You already know the command: -->
+
+<!-- ``` -->
+<!-- (gdb) backtrace -->
+<!-- #0  __bkpt () at asm/bkpt.s:3 -->
+<!-- #1  0x08000224 in cortex_m::asm::bkpt () -->
+<!--     at $REGISTRY/cortex-m-0.5.2/src/asm.rs:19 -->
+<!-- #2  rust_begin_unwind (info=0x10001f84) at src/06-hello-world/auxiliary/src/lib.rs:31 -->
+<!-- #3  0x08002548 in core::panicking::panic_fmt () at libcore/panicking.rs:92 -->
+<!-- #4  0x080024d8 in core::panicking::panic () at libcore/panicking.rs:53 -->
+<!-- #5  0x08000194 in hello_world::main () at src/06-hello-world/src/main.rs:14 -->
+<!-- ``` -->
+
+<!-- Ultimately, `panic!` is just another function call so you can see it leaves behind a trace of -->
+<!-- function calls. -->
+
+Another thing you can do is catch the panic *before* it does the logging by
+putting a breakpoint on the `rust_begin_unwind` symbol.
 
 ```
 (gdb) monitor reset halt
-target state: halted
+(..)
 target halted due to debug-request, current mode: Thread
-xPSR: 0x01000000 pc: 0x08000194 msp: 0x2000a000
+xPSR: 0x01000000 pc: 0x080026ba msp: 0x10002000
+
+(gdb) break rust_begin_unwind
+Breakpoint 2 at 0x80011d2: file $REGISTRY/panic-itm-0.4.0/src/lib.rs, line 46.
 
 (gdb) continue
 Continuing.
 
-Breakpoint 1, hello_world::main () at $PWD/src/main.rs:10
-10      pub fn main() -> ! {
+Breakpoint 2, rust_begin_unwind (info=0x10001fac) at $REGISTRY/panic-itm-0.4.0/src/lib.rs:46
+46          interrupt::disable();
 ```
 
-We are back in `main`, let's `continue`:
+You'll notice that nothing got printed on the `itmdump` console this time. If
+you resume the program using `continue` then a new line will be printed.
 
-```
-(gdb) continue
-Continuing.
-
-Program received signal SIGTRAP, Trace/breakpoint trap.
-f3::lang_items::panic_fmt (msg=..., file=..., line=11)
-    at $F3/src/lang_items.rs:12
-12          bkpt!();
-```
-
-> Program received signal SIGTRAP, Trace/breakpoint trap.
-
-The program hit a breakpoint! But we didn't set one in GDB. What happened here
-is that `panic!` called the `bkpt!()` macro and that `bkpt!` macro *is* a
-breakpoint in the form of an instruction. `bkpt!()` actually expands to
-`asm!("bkpt")` and `bkpt` is the breakpoint instruction on ARM Cortex-M devices.
-
-Remember that our microcontroller only supports 6 breakpoints? Well, `bkpt!()`
-*doesn't* count towards that limit of 6. Only breakpoints set in GDB using the
-`break` command count towards that limit. So, feel free to use the `bkpt!`
-instruction in your programs from now on. You'll have to wrap it in `unsafe` and
-add `#![feature(asm)]` to your crate tough because the `asm!` syntax extension
-is unstable.
-
-As a final note: Although very useful, ITM is not meant to be used in
-*production*. It requires too many components (an extra microcontroller!)
-because it can only be used when the microcontroller is attached to a debugger.
-
-Later on, we'll see other simpler communication protocols.
+In a later section we'll look into other simpler communication protocols.

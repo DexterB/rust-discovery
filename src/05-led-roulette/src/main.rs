@@ -2,14 +2,14 @@
 #![no_main]
 #![no_std]
 
-extern crate pg;
+use aux5::entry;
 
-#[inline(never)]
-#[no_mangle]
-pub fn main() -> ! {
-    let y;
+#[entry]
+fn main() -> ! {
+    let _y;
     let x = 42;
-    y = x;
+    _y = x;
 
+    // infinite loop; just so we don't leave this stack frame
     loop {}
 }

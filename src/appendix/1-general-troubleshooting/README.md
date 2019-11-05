@@ -27,8 +27,8 @@ in procedure 'ocd_bouncer'
 - Windows: You are probably missing the ST-LINK USB driver. Installation
   instructions [here].
 
-[these instructions]: 03-setup/linux.html#udev%20rules
-[here]: 03-setup/windows.html#ST-LINK%20USB%20driver
+[these instructions]: ../../03-setup/linux.md#udev-rules
+[here]: ../../03-setup/windows.md#st-link-usb-driver
 
 ### can't connect to OpenOCD - "Polling again in X00ms"
 
@@ -156,12 +156,15 @@ To learn more, run the command again with --verbose.
 
 #### Cause
 
-You are probably using `cargo` instead of `xargo`.
+You are using a toolchain older than `nightly-2018-04-08` and forgot to call `rustup target add
+thumbv7em-none-eabihf`.
 
 #### Fix
 
-Use Xargo instead of Cargo!
+Update your nightly and install the `thumbv7em-none-eabihf` target.
 
-```
-$ xargo build --target thumbv7em-none-eabihf
+``` console
+$ rustup update nightly
+
+$ rustup target add thumbv7em-none-eabihf
 ```

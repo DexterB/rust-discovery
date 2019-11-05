@@ -1,7 +1,5 @@
 [target.thumbv7em-none-eabihf]
+runner = "arm-none-eabi-gdb -q"
 rustflags = [
-  "-C",
-  "link-arg=-Tstm32f3discovery.ld",
-  "-C",
-  "link-arg=-nostartfiles",
+  "-C", "link-arg=-Tlink.x",
 ]

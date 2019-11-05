@@ -1,11 +1,14 @@
 [package]
-authors = ["Jorge Aparicio <japaricious@gmail.com>"]
+authors = ["Jorge Aparicio <jorge@japaric.io>"]
+edition = "2018"
 name = "usart"
 version = "0.1.0"
 
-[dependencies]
-fixedvec = "0.2.3"
-pg = { path = "pg" }
+[dependencies.aux11]
+path = "auxiliary"
+# enable this if you are going to use an external serial adapter
+# features = ["adapter"]
 
-[profile.release]
-lto = true
+[dependencies.heapless]
+default-features = false
+version = "0.3.7"

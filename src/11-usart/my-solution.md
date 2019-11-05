@@ -1,57 +1,47 @@
 # My solution
 
 ```rust
+#![deny(unsafe_code)]
 #![no_main]
 #![no_std]
 
-#[macro_use]
-extern crate fixedvec;
+#[allow(unused_imports)]
+use aux11::{entry, iprint, iprintln};
+use heapless::{consts, Vec};
 
-#[macro_use]
-extern crate pg;
+#[entry]
+fn main() -> ! {
+    let (usart1, mono_timer, itm) = aux11::init();
 
-use fixedvec::{FixedVec, Result};
-use pg::peripheral;
+    // A buffer with 32 bytes of capacity
+    let mut buffer: Vec<u8, consts::U32> = Vec::new();
 
-#[inline(never)]
-#[no_mangle]
-pub fn main() -> ! {
-    let usart1 = unsafe { peripheral::usart1_mut() };
-
-    let mut memory = alloc_stack!([u8; 32]);
-    let mut buffer = FixedVec::new(&mut memory);
     loop {
-        // Receive
         buffer.clear();
-        match (|| -> Result<()> {
-            loop {
-                while !usart1.isr.read().rxne() {}
-                let byte = usart1.rdr.read().rdr() as u8;
 
-                try!(buffer.push(byte));
+        loop {
+            while usart1.isr.read().rxne().bit_is_clear() {}
+            let byte = usart1.rdr.read().rdr().bits() as u8;
 
-                // Carriage return
-                if byte == 13 {
-                    break;
+            if buffer.push(byte).is_err() {
+                // buffer full
+                for byte in b"error: buffer full\n\r" {
+                    while usart1.isr.read().txe().bit_is_clear() {}
+                    usart1.tdr.write(|w| w.tdr().bits(u16::from(*byte)));
                 }
+
+                break;
             }
 
-            Ok(())
-        })() {
-            Err(_) => {
-                for byte in b"error: buffer overflow\n\r" {
-                    while !usart1.isr.read().txe() {}
-                    usart1.tdr.write(|w| w.tdr(u16::from(*byte)));
-                }
-            }
-            Ok(_) => {
+            // Carriage return
+            if byte == 13 {
                 // Respond
-                for byte in buffer.iter()
-                    .rev()
-                    .chain(&['\n' as u8, '\r' as u8]) {
-                    while !usart1.isr.read().txe() {}
-                    usart1.tdr.write(|w| w.tdr(u16::from(*byte)));
+                for byte in buffer.iter().rev().chain(&[b'\n', b'\r']) {
+                    while usart1.isr.read().txe().bit_is_clear() {}
+                    usart1.tdr.write(|w| w.tdr().bits(u16::from(*byte)));
                 }
+
+                break;
             }
         }
     }

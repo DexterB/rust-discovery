@@ -2,26 +2,26 @@
 #![no_main]
 #![no_std]
 
-#[macro_use]
-extern crate pg;
+#[allow(unused_imports)]
+use aux16::{entry, iprint, iprintln, prelude::*, I16x3, Sensitivity};
 
-use pg::I16x3;
-use pg::{delay, lsm303dlhc};
+#[entry]
+fn main() -> ! {
+    let (mut lsm303dlhc, mut delay, _mono_timer, mut itm) = aux16::init();
 
-#[inline(never)]
-#[no_mangle]
-pub fn main() -> ! {
+    // extend sensing range to `[-12g, +12g]`
+    lsm303dlhc.set_accel_sensitivity(Sensitivity::G12).unwrap();
     loop {
-        const FACTOR: f32 = 8. / ((1 << 15) as f32);
+        const SENSITIVITY: f32 = 12. / (1 << 14) as f32;
 
-        let I16x3 { x, y, z } = lsm303dlhc::acceleration();
+        let I16x3 { x, y, z } = lsm303dlhc.accel().unwrap();
 
-        let x = f32::from(x) * FACTOR;
-        let y = f32::from(y) * FACTOR;
-        let z = f32::from(z) * FACTOR;
+        let x = f32::from(x) * SENSITIVITY;
+        let y = f32::from(y) * SENSITIVITY;
+        let z = f32::from(z) * SENSITIVITY;
 
-        iprintln!("{:?}", (x, y, z));
+        iprintln!(&mut itm.stim[0], "{:?}", (x, y, z));
 
-        delay::ms(1_000);
+        delay.delay_ms(1_000_u16);
     }
 }
